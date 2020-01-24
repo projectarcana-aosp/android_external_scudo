@@ -40,6 +40,11 @@ cc_defaults {
         "-Werror=int-to-pointer-cast",
         "-Werror=type-limits",
         "-Werror",
+
+        // Always force alignment to 16 bytes even on 32 bit.
+        // Android assumes that allocations of multiples of 16 bytes
+        // will be aligned to at least 16 bytes.
+        "-DSCUDO_MIN_ALIGNMENT_LOG=4",
     ],
     cppflags: [
         "-nostdinc++",
@@ -86,6 +91,11 @@ cc_defaults {
     header_libs: [
         "bionic_libc_platform_headers",
     ],
+    product_variables: {
+        experimental_mte: {
+            cflags: ["-DANDROID_EXPERIMENTAL_MTE"],
+        },
+    },
 }
 
 cc_library_static {
@@ -133,5 +143,13 @@ cc_test {
         "-Wno-unused-parameter",
         "-fno-emulated-tls",
     ],
+    header_libs: [
+        "bionic_libc_platform_headers",
+    ],
+    product_variables: {
+        experimental_mte: {
+            cflags: ["-DANDROID_EXPERIMENTAL_MTE"],
+        },
+    },
     test_suites: ["general-tests"],
 }
