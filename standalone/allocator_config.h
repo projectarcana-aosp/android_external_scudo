@@ -48,9 +48,9 @@ struct AndroidConfig {
   typedef SizeClassAllocator32<SizeClassMap, 18U, 1000, 1000> Primary;
 #endif
   // Cache blocks up to 2MB
-  typedef MapAllocator<MapAllocatorCache<32U, 2UL << 20, 0, 1000>> Secondary;
+  typedef MapAllocator<MapAllocatorCache<256U, 32UL << 20, 0, 1000>> Secondary;
   template <class A>
-  using TSDRegistryT = TSDRegistrySharedT<A, 2U>; // Shared, max 2 TSDs.
+  using TSDRegistryT = TSDRegistrySharedT<A, 8U>; // Shared, max 8 TSDs.
 };
 
 struct AndroidSvelteConfig {
