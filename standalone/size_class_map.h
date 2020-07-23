@@ -173,7 +173,7 @@ struct AndroidSizeClassConfig {
   static const uptr NumBits = 7;
   static const uptr MinSizeLog = 4;
   static const uptr MidSizeLog = 6;
-  static const uptr MaxSizeLog = 16;
+  static const uptr MaxSizeLog = 18;
   static const u32 MaxNumCachedHint = 14;
   static const uptr MaxBytesCachedLog = 13;
 
@@ -182,6 +182,7 @@ struct AndroidSizeClassConfig {
       0x000c0, 0x000e0, 0x00120, 0x00160, 0x001c0, 0x00250, 0x00320, 0x00450,
       0x00670, 0x00830, 0x00a10, 0x00c30, 0x01010, 0x01210, 0x01bd0, 0x02210,
       0x02d90, 0x03790, 0x04010, 0x04810, 0x05a10, 0x07310, 0x08210, 0x10010,
+      0x18010, 0x20010, 0x28010, 0x30010, 0x38010, 0x40010,
   };
   static const uptr SizeDelta = 16;
 #else
