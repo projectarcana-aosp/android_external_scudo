@@ -17,10 +17,6 @@
 #define SCUDO_MALLOC_ALIGNMENT FIRST_32_SECOND_64(8U, 16U)
 #endif
 
-#if SCUDO_ANDROID
-#include <malloc.h>
-#endif
-
 extern "C" {
 
 INTERFACE WEAK void *SCUDO_PREFIX(calloc)(size_t nmemb, size_t size) {
@@ -180,6 +176,12 @@ INTERFACE WEAK int SCUDO_PREFIX(mallopt)(int param, int value) {
   } else {
     scudo::Option option;
     switch (param) {
+    case M_MEMTAG_TUNING:
+      option = scudo::Option::MemtagTuning;
+      break;
+    case M_THREAD_DISABLE_MEM_INIT:
+      option = scudo::Option::ThreadDisableMemInit;
+      break;
     case M_CACHE_COUNT_MAX:
       option = scudo::Option::MaxCacheEntriesCount;
       break;
