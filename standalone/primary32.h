@@ -13,6 +13,7 @@
 #include "common.h"
 #include "list.h"
 #include "local_cache.h"
+#include "options.h"
 #include "release.h"
 #include "report.h"
 #include "stats.h"
@@ -189,7 +190,7 @@ public:
       const s32 Interval =
           Max(Min(static_cast<s32>(Value), MaxReleaseToOsIntervalMs),
               MinReleaseToOsIntervalMs);
-      atomic_store(&ReleaseToOsIntervalMs, Interval, memory_order_relaxed);
+      atomic_store_relaxed(&ReleaseToOsIntervalMs, Interval);
       return true;
     }
     // Not supported by the Primary, but not an error either.
@@ -206,7 +207,10 @@ public:
     return TotalReleasedBytes;
   }
 
-  bool useMemoryTagging() { return false; }
+  static bool useMemoryTagging(Options Options) {
+    (void)Options;
+    return false;
+  }
   void disableMemoryTagging() {}
 
   const char *getRegionInfoArrayAddress() const { return nullptr; }
@@ -217,6 +221,8 @@ public:
     (void)Ptr;
     return {};
   }
+
+  AtomicOptions Options;
 
 private:
   static const uptr NumClasses = SizeClassMap::NumClasses;
@@ -260,7 +266,7 @@ private:
     uptr MapSize = 2 * RegionSize;
     const uptr MapBase = reinterpret_cast<uptr>(
         map(nullptr, MapSize, "scudo:primary", MAP_ALLOWNOMEM));
-    if (UNLIKELY(!MapBase))
+    if (!MapBase)
       return 0;
     const uptr MapEnd = MapBase + MapSize;
     uptr Region = MapBase;
@@ -307,29 +313,6 @@ private:
     return &SizeClassInfoArray[ClassId];
   }
 
-  bool populateBatches(CacheT *C, SizeClassInfo *Sci, uptr ClassId,
-                       TransferBatch **CurrentBatch, u32 MaxCount,
-                       void **PointersArray, u32 Count) {
-    if (ClassId != SizeClassMap::BatchClassId)
-      shuffle(PointersArray, Count, &Sci->RandState);
-    TransferBatch *B = *CurrentBatch;
-    for (uptr I = 0; I < Count; I++) {
-      if (B && B->getCount() == MaxCount) {
-        Sci->FreeList.push_back(B);
-        B = nullptr;
-      }
-      if (!B) {
-        B = C->createBatch(ClassId, PointersArray[I]);
-        if (UNLIKELY(!B))
-          return false;
-        B->clear();
-      }
-      B->add(PointersArray[I]);
-    }
-    *CurrentBatch = B;
-    return true;
-  }
-
   NOINLINE TransferBatch *populateFreeList(CacheT *C, uptr ClassId,
                                            SizeClassInfo *Sci) {
     uptr Region;
@@ -365,38 +348,35 @@ private:
             static_cast<u32>((RegionSize - Offset) / Size));
     DCHECK_GT(NumberOfBlocks, 0U);
 
-    TransferBatch *B = nullptr;
     constexpr u32 ShuffleArraySize =
         MaxNumBatches * TransferBatch::MaxNumCached;
     // Fill the transfer batches and put them in the size-class freelist. We
     // need to randomize the blocks for security purposes, so we first fill a
     // local array that we then shuffle before populating the batches.
     void *ShuffleArray[ShuffleArraySize];
-    u32 Count = 0;
-    const uptr AllocatedUser = Size * NumberOfBlocks;
-    for (uptr I = Region + Offset; I < Region + Offset + AllocatedUser;
-         I += Size) {
-      ShuffleArray[Count++] = reinterpret_cast<void *>(I);
-      if (Count == ShuffleArraySize) {
-        if (UNLIKELY(!populateBatches(C, Sci, ClassId, &B, MaxCount,
-                                      ShuffleArray, Count)))
-          return nullptr;
-        Count = 0;
-      }
-    }
-    if (Count) {
-      if (UNLIKELY(!populateBatches(C, Sci, ClassId, &B, MaxCount, ShuffleArray,
-                                    Count)))
+    DCHECK_LE(NumberOfBlocks, ShuffleArraySize);
+
+    uptr P = Region + Offset;
+    for (u32 I = 0; I < NumberOfBlocks; I++, P += Size)
+      ShuffleArray[I] = reinterpret_cast<void *>(P);
+    // No need to shuffle the batches size class.
+    if (ClassId != SizeClassMap::BatchClassId)
+      shuffle(ShuffleArray, NumberOfBlocks, &Sci->RandState);
+    for (u32 I = 0; I < NumberOfBlocks;) {
+      TransferBatch *B = C->createBatch(ClassId, ShuffleArray[I]);
+      if (UNLIKELY(!B))
         return nullptr;
-    }
-    DCHECK(B);
-    if (!Sci->FreeList.empty()) {
+      const u32 N = Min(MaxCount, NumberOfBlocks - I);
+      B->setFromArray(&ShuffleArray[I], N);
       Sci->FreeList.push_back(B);
-      B = Sci->FreeList.front();
-      Sci->FreeList.pop_front();
+      I += N;
     }
+    TransferBatch *B = Sci->FreeList.front();
+    Sci->FreeList.pop_front();
+    DCHECK(B);
     DCHECK_GT(B->getCount(), 0);
 
+    const uptr AllocatedUser = Size * NumberOfBlocks;
     C->getStats().add(StatFree, AllocatedUser);
     DCHECK_LE(Sci->CurrentRegionAllocated + AllocatedUser, RegionSize);
     // If there is not enough room in the region currently associated to fit
@@ -456,8 +436,7 @@ private:
     }
 
     if (!Force) {
-      const s32 IntervalMs =
-          atomic_load(&ReleaseToOsIntervalMs, memory_order_relaxed);
+      const s32 IntervalMs = atomic_load_relaxed(&ReleaseToOsIntervalMs);
       if (IntervalMs < 0)
         return 0;
       if (Sci->ReleaseInfo.LastReleaseAtNs +
@@ -483,12 +462,15 @@ private:
       }
     }
     uptr TotalReleasedBytes = 0;
+    auto SkipRegion = [this, First, ClassId](uptr RegionIndex) {
+      return (PossibleRegions[First + RegionIndex] - 1U) != ClassId;
+    };
     if (First && Last) {
       const uptr Base = First * RegionSize;
       const uptr NumberOfRegions = Last - First + 1U;
       ReleaseRecorder Recorder(Base);
       releaseFreeMemoryToOS(Sci->FreeList, Base, RegionSize, NumberOfRegions,
-                            BlockSize, &Recorder);
+                            BlockSize, &Recorder, SkipRegion);
       if (Recorder.getReleasedRangesCount() > 0) {
         Sci->ReleaseInfo.PushedBlocksAtLastRelease = Sci->Stats.PushedBlocks;
         Sci->ReleaseInfo.RangesReleased += Recorder.getReleasedRangesCount();
