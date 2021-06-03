@@ -52,7 +52,7 @@ template <typename Config> static void testSecondaryBasic(void) {
     L->deallocate(scudo::Options{}, V.back());
     V.pop_back();
   }
-  scudo::ScopedString Str(1024);
+  scudo::ScopedString Str;
   L->getStats(&Str);
   Str.output();
 }
@@ -109,7 +109,7 @@ TEST(ScudoSecondaryTest, SecondaryCombinations) {
       }
     }
   }
-  scudo::ScopedString Str(1024);
+  scudo::ScopedString Str;
   L->getStats(&Str);
   Str.output();
 }
@@ -132,7 +132,7 @@ TEST(ScudoSecondaryTest, SecondaryIterate) {
     L->deallocate(scudo::Options{}, V.back());
     V.pop_back();
   }
-  scudo::ScopedString Str(1024);
+  scudo::ScopedString Str;
   L->getStats(&Str);
   Str.output();
 }
@@ -201,7 +201,7 @@ TEST(ScudoSecondaryTest, SecondaryThreadsRace) {
   }
   for (auto &T : Threads)
     T.join();
-  scudo::ScopedString Str(1024);
+  scudo::ScopedString Str;
   L->getStats(&Str);
   Str.output();
 }
