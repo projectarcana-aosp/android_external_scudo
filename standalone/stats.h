@@ -89,11 +89,8 @@ public:
       S[I] = static_cast<sptr>(S[I]) >= 0 ? S[I] : 0;
   }
 
-  void lock() { Mutex.lock(); }
-  void unlock() { Mutex.unlock(); }
-
-  void disable() { lock(); }
-  void enable() { unlock(); }
+  void disable() { Mutex.lock(); }
+  void enable() { Mutex.unlock(); }
 
 private:
   mutable HybridMutex Mutex;

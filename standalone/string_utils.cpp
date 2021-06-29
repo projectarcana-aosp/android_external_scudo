@@ -115,8 +115,8 @@ static int appendPointer(char **Buffer, const char *BufferEnd, u64 ptr_value) {
   return Res;
 }
 
-static int formatString(char *Buffer, uptr BufferLength, const char *Format,
-                        va_list Args) {
+int formatString(char *Buffer, uptr BufferLength, const char *Format,
+                 va_list Args) {
   static const char *PrintfFormatsHelp =
       "Supported formatString formats: %([0-9]*)?(z|ll)?{d,u,x,X}; %p; "
       "%[-]([0-9]*)?(\\.\\*)?s; %c\n";
@@ -207,14 +207,6 @@ static int formatString(char *Buffer, uptr BufferLength, const char *Format,
   }
   RAW_CHECK(Buffer <= BufferEnd);
   appendChar(&Buffer, BufferEnd + 1, '\0');
-  return Res;
-}
-
-int formatString(char *Buffer, uptr BufferLength, const char *Format, ...) {
-  va_list Args;
-  va_start(Args, Format);
-  int Res = formatString(Buffer, BufferLength, Format, Args);
-  va_end(Args);
   return Res;
 }
 
