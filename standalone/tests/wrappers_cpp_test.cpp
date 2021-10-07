@@ -121,10 +121,6 @@ TEST(ScudoWrappersCppTest, ThreadedNew) {
 }
 
 #if !SCUDO_FUCHSIA
-// TODO(kostyak): for me, this test fails in a specific configuration when ran
-//                by itself with some Scudo or GWP-ASan violation. Other people
-//                can't seem to reproduce the failure. Consider skipping this in
-//                the event it fails on the upstream bots.
 TEST(ScudoWrappersCppTest, AllocAfterFork) {
   std::atomic_bool Stop;
 
@@ -133,7 +129,7 @@ TEST(ScudoWrappersCppTest, AllocAfterFork) {
   for (size_t N = 0; N < 5; N++) {
     std::thread *T = new std::thread([&Stop] {
       while (!Stop) {
-        for (size_t SizeLog = 3; SizeLog <= 21; SizeLog++) {
+        for (size_t SizeLog = 3; SizeLog <= 20; SizeLog++) {
           char *P = new char[1UL << SizeLog];
           EXPECT_NE(P, nullptr);
           // Make sure this value is not optimized away.
@@ -146,10 +142,10 @@ TEST(ScudoWrappersCppTest, AllocAfterFork) {
   }
 
   // Create a thread to fork and allocate.
-  for (size_t N = 0; N < 100; N++) {
+  for (size_t N = 0; N < 50; N++) {
     pid_t Pid;
     if ((Pid = fork()) == 0) {
-      for (size_t SizeLog = 3; SizeLog <= 21; SizeLog++) {
+      for (size_t SizeLog = 3; SizeLog <= 20; SizeLog++) {
         char *P = new char[1UL << SizeLog];
         EXPECT_NE(P, nullptr);
         // Make sure this value is not optimized away.
